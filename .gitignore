@@ -1,0 +1,11 @@
+# 개인 데이터는 절대 올리지 않는다
+private/*
+!private/README.md
+*.xlsx
+*.csv
+!templates/*.csv
+*.jsonl
+.env*
+__pycache__/
+.DS_Store
+node_modules/

@@ -1,0 +1,13 @@
+{
+  "name": "personal-cashflow-kit",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login:gmail": "node scripts/fetch/login_gmail.mjs",
+    "login:naver": "node scripts/fetch/login_naver.mjs",
+    "fetch:banksalad": "node scripts/fetch/fetch_banksalad.mjs",
+    "fetch:coupang": "node scripts/fetch/fetch_coupang.mjs",
+    "fetch:naver": "node scripts/fetch/fetch_naver.mjs"
+  },
+  "dependencies": { "playwright": "^1.58.0" }
+}

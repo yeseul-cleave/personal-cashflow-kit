@@ -1,0 +1,49 @@
+# 투자 기초 투자 기초 (2026.08) 프레임 — 킷이 인터뷰 후 '깨달음' 섹션을 만들 때 쓰는 기준값.
+# 출처: 투자 기초 재무제표 가이드라인 / 코어-새틀라이트 가이드라인 / ETF 모음집 (참고용·특정 종목 추천 아님. 최종 판단은 본인).
+source: "투자 기초 투자 기초 (2026.08) 자료 모음"
+disclaimer: "정보 전달용이며 특정 종목 추천이 아닙니다. 모든 투자의 최종 판단과 책임은 투자자 본인에게 있습니다."
+
+checklist:
+  savings_rate_warn: 0.20      # 저축률 20% 미만 주의
+  savings_rate_good: 0.30      # 30% 이상 우수
+  insurance_ratio: [0.03, 0.05] # 보장성 보험료 = 세후 급여의 3~5%
+  telecom_alert: 30000          # 통신비가 이 이상이면 알뜰폰 비교 권유 (실제 1~2만원대 多)
+  weekly_allowance_divisor: 4   # 주간 용돈 = 직전 3개월 카드값 평균 ÷ 4
+  seasonal_budget_ratio: 0.10   # 계절지출 1년 예산 = 세전 연봉의 10% (세후만 알면 ×1.15 근사)
+  gross_from_net: 1.15
+
+core_satellite:
+  core_min: 0.50
+  profiles:
+    보수적: {core: 0.90, satellite: 0.10}
+    공격적: {core: 0.60, satellite: 0.40}
+    투자 기초_예시: {core_us: 0.40, core_exus: 0.10, sat_sector: 0.40, sat_safe: 0.10}
+  monthly_example_100:   # 월 100만원 기준 국내상장 예시 (가이드라인 p2)
+    - {name: "TIGER 미국S&P500 (또는 나스닥)", amount: 500000, role: core_us}
+    - {name: "TIGER 인도니프티50", amount: 100000, role: core_exus}
+    - {name: "TIGER 미국필라델피아반도체나스닥", amount: 350000, role: sat_sector}
+    - {name: "ACE KRX금현물", amount: 50000, role: sat_safe}
+
+# 보유 종목 이름으로 코어/위성/안전자산 분류 (부분 포함, 대소문자 무시)
+classify:
+  core:  [S&P500, "S&P 500", 나스닥100, NASDAQ100, "KODEX 200", "TIGER 200", "KODEX 200TR", MSCI선진국, MSCI, 글로벌MSCI, VOO, IVV, SPY, QQQ, QQQM, VEA, IEFA, EFA, VWO, IEMG, EEM, EWY, 니프티, Nifty, INDA, 인도, 선진국, 신흥국, 전세계, 올웨더, TDF]
+  safe:  [금현물, KRX금, GLD, IAU, 채권, 국고채, TLT, IEF, AGG, BND, 달러, 원자재, 단기채, MMF, 파킹]
+  dividend: [배당, SCHD, VIG, JEPI, 커버드콜, 배당다우존스, 배당성장]   # 팩터형 위성
+
+# ETF 후보 (모음집 TOP1·TOP3) — 결과물에 표로 보여주기만 한다
+etf:
+  core:
+    미국 S&P500: {kr: [TIGER 미국S&P500, KODEX 미국S&P500, ACE 미국S&P500], us: [VOO, IVV, SPY]}
+    미국 나스닥100: {kr: [TIGER 미국나스닥100, KODEX 미국나스닥100, ACE 미국나스닥100], us: [QQQ, QQQM]}
+    한국 KOSPI200: {kr: [KODEX 200, TIGER 200, KODEX 200TR], us: [EWY, FLKR]}
+    선진국·글로벌: {kr: [KODEX MSCI선진국, PLUS 글로벌MSCI], us: [VEA, IEFA, EFA]}
+    신흥국: {kr: [], us: [VWO, IEMG, EEM]}
+    인도: {kr: [TIGER 인도니프티50, KODEX 인도Nifty50, TIGER 인도빌리언컨슈머], us: [INDA, EPI, SMIN]}
+  satellite:
+    AI 빅테크: {kr: [TIGER 미국테크TOP10 INDXX, KODEX 미국AI테크TOP10, TIGER 미국AI빅테크10], us: [AIQ, BOTZ, ARTY]}
+    반도체: {kr: [TIGER 미국필라델피아반도체나스닥, SOL AI반도체TOP2플러스, SOL AI반도체소부장], us: [SMH, SOXX, DRAM]}
+    AI 인프라(전력·광통신): {kr: [TIGER 글로벌AI인프라액티브, RISE AI전력인프라, KODEX 미국AI광통신네트워크], us: [GRID, XLU, PAVE]}
+    휴머노이드·로봇: {kr: [KODEX 미국휴머노이드로봇, RISE 미국휴머노이드로봇, TIGER 코리아휴머노이드로봇산업], us: [BOTZ, ROBO, ARKQ]}
+    우주항공·방산: {kr: [PLUS K방산, TIGER K방산&우주, TIMEFOLIO 글로벌우주테크&방산액티브], us: [ITA, PPA, EUAD]}
+    고배당(팩터): {kr: [TIGER 미국배당다우존스], us: [VIG, SCHD]}
+    금(안전자산): {kr: [ACE KRX금현물], us: [GLD]}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "이번 달 마감"
+  short_description: "새 뱅샐 export로 월 현금흐름·자산 요약을 갱신합니다"
+  default_prompt: "Use $cashflow-monthly to close this month from the new Banksalad export."

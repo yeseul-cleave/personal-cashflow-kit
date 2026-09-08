@@ -1,0 +1,4 @@
+interface:
+  display_name: "재무 프로필 세팅"
+  short_description: "뱅샐 1년치 export로 내 재무 프로필을 인터뷰하며 만듭니다"
+  default_prompt: "Use $cashflow-setup to run the first-time financial profile interview from my Banksalad export."

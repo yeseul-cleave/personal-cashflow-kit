@@ -1,0 +1,16 @@
+{
+  "_설명": "private/fetch.json 으로 복사해서 채운다. 자동 수집(뱅샐 메일·쿠팡 메일·네이버페이) 설정. 비밀번호는 여기 말고 환경변수로 줘도 된다.",
+  "gmail_index": "auto",
+  "_gmail_index": "auto 면 뱅샐 메일이 있는 계정(u/N)을 스크립트가 찾아 여기에 기록한다. 직접 지정하려면 숫자.",
+  "banksalad_zip_password": "",
+  "_banksalad_zip_password": "뱅샐 '파일로 받기'에서 정한 압축 비밀번호. 비우면 환경변수 BANKSALAD_ZIP_PW.",
+  "banksalad_mail_count": 1,
+  "_banksalad_mail_count": "최신 뱅샐 메일 몇 통을 받을지. 배우자가 같은 메일로 보냈으면 2.",
+  "coupang": true,
+  "gmail_index_coupang": 0,
+  "_gmail_index_coupang": "쿠팡 주문 메일이 다른 Gmail 계정으로 오면 그 계정의 N. 같으면 gmail_index 와 동일.",
+  "kurly": true,
+  "_kurly": "컬리 주문접수 메일에서 품목·결제금액. 쿠팡과 같은 Gmail 계정을 본다.",
+  "naver": false,
+  "_naver": "네이버페이 결제내역 수집. 먼저 npm run login:naver 로 세션 저장."
+}
