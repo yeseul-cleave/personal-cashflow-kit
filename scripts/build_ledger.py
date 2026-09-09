@@ -110,20 +110,22 @@ def main(argv: list[str]) -> None:
         fixed = "N"
         status = reason = ""
 
-        if role == "exclude":
-            status, reason = "제외", f"계좌 role=exclude ({a['name']})"
-            cat, sub = "제외", ""
-        elif (ov := overrides.get(tx_key(t))):
+        if (ov := overrides.get(tx_key(t))):
             cat, sub = ov.get("카테고리", ""), ov.get("세부", "")
             owner = ov.get("귀속") or owner
             fixed = ov.get("고정비") or "N"
             status, reason = "사용자", "overrides.csv"
-            if cat in INCOME_CATS:
+            if cat == "제외":
+                status = "제외"
+            elif cat in INCOME_CATS:
                 sub = sub or cat; cat = "수입"
             elif cat in CAPITAL_CATS:
                 status = "자산거래"
             elif cat == "내부이체":
                 status = "내부이체"
+        elif role == "exclude":
+            status, reason = "제외", f"계좌 role=exclude ({a['name']})"
+            cat, sub = "제외", ""
         elif t.type == "이체":
             desc = t.desc
             hit_alias = next((acc for al, acc in alias_to_acc if al and al in desc), None)
