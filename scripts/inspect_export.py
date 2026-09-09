@@ -378,6 +378,7 @@ def main(argv: list[str]) -> None:
     Q.append("# 인터뷰 질문지\n")
     Q.append("> 먼저 최근 생활을 카테고리로 확인한 뒤, 가구 → 계좌·카드·종목 귀속 → 반복 지출 → 사람 송금 → 남은 큰 미분류 → 수입 → 주거 형태 순서로 좁혀 간다. 뱅샐이 이미 분류한 식사·카페·교통과 공통 룰로 잡히는 가맹점은 **묻지 않는다**.")
     Q.append("> AI는 이 순서로 **한 번에 하나씩** 묻고, 답을 profile.yaml / rules.csv 에 바로 적는다.")
+    Q.append("> 인터뷰는 **최대 20문**이다. 큰 금액·반복비·수입처럼 결과를 바꾸는 것만 먼저 확인하고, 나머지는 확인필요로 남긴다.")
     Q.append("> 질문에 붙은 표·목록은 **요약하지 않고 그대로** 보여준다. 행을 합치거나 '외 N개'로 줄이지 않는다.")
     Q.append("> 각 질문에는 근거(어디서 얼마가 움직였는지)가 붙어 있어 기억을 더듬지 않아도 된다.\n")
     n = 0
@@ -447,13 +448,15 @@ def main(argv: list[str]) -> None:
         Q.append(f"| {i} | {r['match']} | {evidence} | {r['account']} | {r['guess']} |")
     Q.append("")
     Q.append("## D. 사람에게 간 이체 (상대당 1문)\n")
-    for k, cnt, amt in people_like[:12]:
+    # 사람 이체는 큰 금액부터 여섯 묶음까지만 묻는다. 나머지는 결과를 낸 뒤 필요할 때 확인한다.
+    for k, cnt, amt in people_like[:6]:
         n += 1
         Q.append(f"{n}. **{k}** 에게/에게서 {cnt}건 · {won(amt)} — 누구이고, 이 돈은 무엇인가요? (내 계좌 / 가족 이전 / 월세·보증금 / 빌려준 돈 / 모임비 …)")
     Q.append("")
     Q.append(f"## E. 남은 미분류 가맹점 (공통 룰로 {auto_by_seed}건 자동 처리 후, 금액 누적 80%까지)\n")
     acc_amt = 0
-    for m, lst in cl_sorted:
+    # 미분류 가맹점은 인터뷰를 길게 만들기 쉬우므로, 큰 두 묶음만 우선 확인한다.
+    for m, lst in cl_sorted[:2]:
         s = sum(abs(t.amount) for t in lst)
         if acc_amt >= total_unc * 0.8 and n > 0:
             break
@@ -462,19 +465,24 @@ def main(argv: list[str]) -> None:
         Q.append(f"{n}. **{m}** — {len(lst)}건 · {won(s)} (예: {lst[-1].desc}) → 카테고리는?")
     Q.append("")
     Q.append("## F. 수입원\n")
-    for r in salary_like[:5]:
+    # 수입은 생활비 판단에 직접 쓰이므로, 남은 질문 수와 무관하게 우선 확보한다.
+    for r in salary_like[:3]:
+        if n >= 17:
+            break
         n += 1
         if r["company"]:
             Q.append(f"{n}. **{r['match']}** — 이체로 매달 입금, {r['months']}개월 · 약 {won(r['median'])} ({r['account']}) → **급여**로 볼게요. 아니면 뭔가요? (사업 / 배당 / 가족 지원 / 월세 수입)")
         else:
             Q.append(f"{n}. **{r['match']}** — 이체로 매달 입금, {r['months']}개월 · 약 {won(r['median'])} ({r['account']}) → 무엇인가요? (급여 / 사업 / 가족 지원 / 월세 수입 / 내 계좌 이동)")
     for k, cnt in incomes[:6]:
+        if n >= 17:
+            break
         if not good_keyword(k):
             continue
         n += 1
         Q.append(f"{n}. **{k}** — {cnt}건 · {won(income_amt[k])} → 급여 / 사업 / 배당·이자 / 가족 지원 / 환급 중?")
     Q.append("")
-    if status.investments:
+    if status.investments and n < 19:
         Q.append("## G. 주식·ETF·펀드 귀속\n")
         n += 1
         Q.append(f"{n}. 총액을 다시 묻지 않습니다. export에 잡힌 **종목 하나하나가 누구 돈인지**만 확인합니다. 내 것 / 위탁(누구 돈, 비율) / 제외 중 틀린 항목만 번호로 알려주세요. 다 내 것이면 '전부 내 것'.\n")
@@ -483,10 +491,11 @@ def main(argv: list[str]) -> None:
         for i, inv in enumerate(status.investments, 1):
             Q.append(f"| {i} | {inv.get('금융사', '')} | {inv.get('상품명', '')} | {inv.get('투자상품종류', '')} | {won(inv.get('평가금액') or 0)} | 내 것 |")
         Q.append("")
-    Q.append("## H. 주거 형태 (1문)\n")
-    n += 1
-    housing_evidence = ", ".join(f"{l.get('상품명','대출')} 잔액 {won(l.get('대출잔액') or 0)}" for l in status.loans if "주택" in str(l) or "담보" in str(l))
-    Q.append(f"{n}. 현재 주거는 **자가 / 전세 / 월세 / 가족 집 / 회사 제공 / 기타** 중 무엇인가요? 자가·전세라면 공동명의나 남의 돈이 섞였는지도 알려주세요." + (f" export에는 {housing_evidence} 정보가 있어 자가 가능성이 있습니다." if housing_evidence else " export에서 주택 소유를 확정할 근거는 찾지 못했습니다."))
+    if n < 20:
+        Q.append("## H. 주거 형태 (1문)\n")
+        n += 1
+        housing_evidence = ", ".join(f"{l.get('상품명','대출')} 잔액 {won(l.get('대출잔액') or 0)}" for l in status.loans if "주택" in str(l) or "담보" in str(l))
+        Q.append(f"{n}. 현재 주거는 **자가 / 전세 / 월세 / 가족 집 / 회사 제공 / 기타** 중 무엇인가요? 자가·전세라면 공동명의나 남의 돈이 섞였는지도 알려주세요." + (f" export에는 {housing_evidence} 정보가 있어 자가 가능성이 있습니다." if housing_evidence else " export에서 주택 소유를 확정할 근거는 찾지 못했습니다."))
     Q.append(f"\n---\n총 {n}문. 계좌(B)와 이체 상대(D)가 핵심이고 E~H는 '맞아/아니' 수준. 확인형 질문은 답이 '네'면 다음으로.")
     (SETUP / "02_질문지.md").write_text("\n".join(Q), encoding="utf-8")
 
