@@ -21,7 +21,7 @@ sh scripts/fetch.sh                             # 메일에서 zip 받아 privat
 python3 scripts/inspect_export.py               # 진단 + 프로필 초안 + 질문지
 ```
 
-그다음은 Codex(또는 Claude Code)에서 **"세팅 시작"** 이라고 말하면 된다. 절차는 `SETUP.md`.
+그다음은 Codex(또는 Claude Code)에서 **"세팅 시작"** 이라고 말하면 된다. AI가 사용자 이름과 뱅크샐러드 메일을 받은 Gmail 주소를 먼저 묻고 진행한다. 절차는 `SETUP.md`.
 파일을 손으로 넣어도 된다: xlsx를 `private/exports/`에 두고 `inspect_export.py`부터.
 
 ## 폴더
@@ -43,6 +43,8 @@ personal-cashflow-kit/
 │   ├── build_ledger.py    ← 1단계: 프로필+룰 적용 → ledger.csv · 03_확인필요.md
 │   ├── suggest.py         ← 1.5단계: 확인필요를 AI가 먼저 추측(신뢰도) → 사람은 틀린 것만 → 룰로 승격
 │   ├── summarize.py       ← 2단계: 월 현금흐름·재무상태 요약 → out/
+│   ├── dashboard.py       ← 월별·카테고리·자산 상세를 표와 차트로 보는 로컬 HTML
+│   ├── investment_interview.py ← 집·연금·일반계좌 설계 질문과 다음 설계 탭 데이터
 │   ├── insight.py         ← 3단계: 거울 — 남는 돈·10년 시나리오·집·투자 성향 관찰 → out/insight.md (+ 투자 기초 부록·xlsx)
 │   ├── run.sh             ← 1+2단계 한 방 + 추정 요청 생성 (매달 이것만)
 │   ├── reset.sh           ← 처음부터 다시 (private 를 _archive 로 옮김)

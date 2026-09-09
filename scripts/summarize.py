@@ -216,6 +216,24 @@ def main(argv: list[str]) -> None:
     with open(OUT / "balance_sheet.json", "w", encoding="utf-8") as f:
         json.dump(bs, f, ensure_ascii=False, indent=2, default=str)
 
+    # 같은 달은 갱신하고 새 달은 누적하는 자산 스냅샷
+    asset_history_path = OUT / "asset_monthly.csv"
+    asset_cols = ["월", "총자산", "총부채", "순자산", "유동자산", "입출금", "저축", "투자", "연금", "부동산"]
+    history = {}
+    if asset_history_path.exists():
+        with open(asset_history_path, encoding="utf-8-sig", newline="") as f:
+            history = {r["월"]: r for r in csv.DictReader(f)}
+    snapshot_month = (status.exported_at or months[-1])[:7]
+    history[snapshot_month] = {
+        "월": snapshot_month, "총자산": int(total_a), "총부채": int(total_l), "순자산": int(total_a-total_l),
+        "유동자산": int(liquid), "입출금": int(bs["assets"].get("checking", 0)),
+        "저축": int(bs["assets"].get("savings", 0)), "투자": int(bs["assets"].get("investment", 0)),
+        "연금": int(bs["assets"].get("pension", 0)), "부동산": int(bs["assets"].get("realestate", 0)),
+    }
+    with open(asset_history_path, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=asset_cols)
+        w.writeheader(); w.writerows(history[m] for m in sorted(history))
+
     # ---- 한 장 요약
     hh = prof["household"]
     L = [f"# 재무 프로필 요약 — {hh.get('label','')}", f"> 생성: summarize.py · export {status.exported_at} · 완전한 달 {full_months[0] if full_months else '-'}~{full_months[-1] if full_months else '-'} 기준"]

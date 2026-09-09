@@ -111,6 +111,17 @@ options:
   home_loan_rate: 0.04         # 주담대 금리 가정
   home_loan_years: 30
 upcoming:                 # 6개월 안에 나갈 큰 돈 (있으면). 투자가용액에서 뺀다
+
+# 투자·집 설계 인터뷰 답. AI가 한 번에 하나씩 묻고 답한 항목만 채운다.
+investment_plan:
+  home_direction: ""       # 현재 집 유지+대출 관리 / 갈아타기 / 추가 주택 / 금융자산 우선
+  priority: ""             # 현금 안전판 / 집·대출 / 노후·연금 / 일반계좌 투자
+  home_timing: ""          # 3년 이내 / 4~7년 / 8년 이후 / 계획 없음
+  buyback_amount_basis: "" # 세후·비용후 실수령액 / 세금·비용 전 / 아직 계산 전
+  contribution_funding: "" # 분담금 중 추가 대출과 현금의 재원 구분
+  drawdown_capacity: ""    # 30% 하락에도 3년간 꺼내지 않을 수 있는 범위
+  pension_constraint: ""   # 은퇴 전까지 묶어둘 수 있는 범위
+  next_check: ""           # 다음 점검일 YYYY-MM-DD
   - {name: "전세 만기 추가 보증금", amount: 20000000, when: "2027-03"}
   lunch_max: 20000        # 이 금액 이하 식사는 '점심'으로 볼 때 (선택)
   small_transfer_ignore: 1000   # 이체 짝 매칭 허용 오차(원)

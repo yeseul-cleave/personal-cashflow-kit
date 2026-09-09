@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 import sys
 from collections import Counter, defaultdict
-from statistics import median
+from statistics import mean, median
 
 import yaml
 
@@ -156,6 +156,59 @@ def main(argv: list[str]) -> None:
         r["guess_cat"] = h["카테고리"] if h else (r["bs_cat"] if r["bs_cat"] != "미분류" else "")
         r["guess_sub"] = h["세부"] if h else ""
         r["fixed"] = (h["고정비"].upper().startswith("Y") if h else False) or r["bs_cat"] in ("주거/통신", "육아", "교육", "보험", "구독")
+        r["evidence"] = sorted(
+            ((t.date.isoformat(), abs(t.amount)) for t in grp[(r["match"], r["account"])]),
+            reverse=True,
+        )
+
+    # ---- 최근 3개월 요약: 인터뷰 전에 사용자가 먼저 확인할 현재 생활의 윤곽
+    # 맨 끝 달이 며칠치뿐이면 월평균을 심하게 왜곡하므로 제외한다.
+    month_last_day = {m: max(t.date.day for t in txs if t.month == m) for m in months}
+    usable_months = months[:-1] if len(months) > 3 and month_last_day[months[-1]] < 20 else months
+    recent_months = usable_months[-3:]
+    preliminary_cats = Counter()
+    recent_income = Counter()
+    salary_transfer_matches = {
+        r["match"] for r in recurring
+        if r["type"] == "수입(이체)" and r["company"] and r["median"] >= 100_000
+    }
+    for t in txs:
+        if t.month not in recent_months:
+            continue
+        if t.type == "수입" or (t.type == "이체" and t.amount > 0 and normalize_merchant(t.desc) in salary_transfer_matches):
+            recent_income[t.month] += abs(t.amount)
+        elif t.type == "지출":
+            h = seed_hit(t.desc)
+            preliminary_cats[h["카테고리"] if h else t.bs_cat] += abs(t.amount)
+    recent_expense_by_month = Counter()
+    for t in txs:
+        if t.month in recent_months and t.type == "지출":
+            recent_expense_by_month[t.month] += abs(t.amount)
+    prelim_income_avg = mean(recent_income[m] for m in recent_months)
+    prelim_expense_avg = mean(recent_expense_by_month[m] for m in recent_months)
+
+    # ---- 연 1~2회 후보: 월 반복 탐지에는 안 잡히지만 앞으로의 현금흐름에는 필요한 지출
+    annual_candidates = []
+    for (m, acc), lst in grp.items():
+        expenses = sorted((t for t in lst if t.type == "지출"), key=lambda t: t.date, reverse=True)
+        if not expenses or len(expenses) > 2 or not good_keyword(m):
+            continue
+        total = sum(abs(t.amount) for t in expenses)
+        h = seed_hit(expenses[0].desc) or seed_hit(m)
+        guess_cat = h["카테고리"] if h else expenses[0].bs_cat
+        annual_signal = (
+            bool(h and h["고정비"].upper().startswith("Y"))
+            or guess_cat in ("보험", "세금/수수료")
+            or bool(re.search(r"보험|세금|연회비|구독|멤버십|정기|갱신|자동차세|재산세", expenses[0].desc))
+        )
+        if not annual_signal:
+            continue
+        annual_candidates.append({
+            "match": m, "account": acc, "count": len(expenses), "total": total,
+            "guess": f"{h['카테고리']}/{h['세부']}" if h else (expenses[0].bs_cat if expenses[0].bs_cat != "미분류" else "?"),
+            "evidence": [(t.date.isoformat(), abs(t.amount)) for t in expenses],
+        })
+    annual_candidates.sort(key=lambda r: -r["total"])
 
     # ---- 미분류 가맹점 클러스터 (시드 룰로 잡히는 건 자동 → 질문 제외)
     clusters: dict[str, list[Tx]] = defaultdict(list)
@@ -323,13 +376,24 @@ def main(argv: list[str]) -> None:
     # ================================================================ 02_질문지.md
     Q = []
     Q.append("# 인터뷰 질문지\n")
-    Q.append("> 깔때기 순서: 가구 → 계좌 성격(추정 확인) → **매달 고정으로 나가는 것** → 사람 송금 → 남은 큰 미분류 → 수입 → 뱅샐에 없는 자산. 뱅샐이 이미 분류한 식사·카페·교통과 공통 룰로 잡히는 가맹점은 **묻지 않는다**.")
+    Q.append("> 먼저 최근 생활을 카테고리로 확인한 뒤, 가구 → 계좌·카드·종목 귀속 → 반복 지출 → 사람 송금 → 남은 큰 미분류 → 수입 → 주거 형태 순서로 좁혀 간다. 뱅샐이 이미 분류한 식사·카페·교통과 공통 룰로 잡히는 가맹점은 **묻지 않는다**.")
     Q.append("> AI는 이 순서로 **한 번에 하나씩** 묻고, 답을 profile.yaml / rules.csv 에 바로 적는다.")
     Q.append("> 질문에 붙은 표·목록은 **요약하지 않고 그대로** 보여준다. 행을 합치거나 '외 N개'로 줄이지 않는다.")
     Q.append("> 각 질문에는 근거(어디서 얼마가 움직였는지)가 붙어 있어 기억을 더듬지 않아도 된다.\n")
     n = 0
     KIND_LABEL = {"card": "카드", "checking": "통장", "pay": "간편결제", "savings": "청약·저축", "investment": "주식·ETF·펀드", "pension": "연금", "loan": "대출", "insurance": "보험", "cash": "현금", "?": "기타"}
     KIND_ORDER = ["card", "checking", "pay", "savings", "investment", "pension", "loan", "insurance", "cash", "?"]
+    Q.append("## 0. 지금 생활의 1차 윤곽 (질문 전 먼저 보여주기)\n")
+    Q.append(f"> 최근 **{', '.join(recent_months)}** 거래를 그대로 나눈 인터뷰 전 추정입니다. 계좌 귀속과 이체를 확인하면 숫자가 달라질 수 있습니다.\n")
+    Q.append("| 항목 | 최근 3개월 월평균 |")
+    Q.append("|---|---:|")
+    Q.append(f"| 들어온 돈 | {won(prelim_income_avg)} |")
+    for cat, amount in preliminary_cats.most_common():
+        Q.append(f"| {cat} | {won(amount / len(recent_months))} |")
+    Q.append(f"| 전체 지출 | **{won(prelim_expense_avg)}** |")
+    Q.append(f"| 단순히 남은 돈 | **{won(prelim_income_avg - prelim_expense_avg)}** |")
+    shopping = sum(v for k, v in preliminary_cats.items() if k in ("생활", "의복/미용")) / len(recent_months)
+    Q.append(f"\n생활·쇼핑으로 보이는 돈은 월 **{won(shopping)}**입니다. 이 표를 먼저 보고 '대체로 맞아 / 이 항목이 이상해'만 확인한 뒤 인터뷰를 시작한다.\n")
     Q.append("## A. 가구 구성 (1문)\n")
     n += 1; Q.append(f"{n}. 이 가계부는 **혼자** 기준인가요, **가족(배우자·아이·부모님)** 과 같이 보나요? 같이 본다면 누구까지 한 지갑으로 볼까요?")
     if people_like:
@@ -338,7 +402,7 @@ def main(argv: list[str]) -> None:
     Q.append("")
     Q.append("## B. 계좌·카드 귀속\n")
     tx_accs = [a for a in accounts if not a["_hint"].startswith("현황")]
-    st_accs = [a for a in accounts if a["_hint"].startswith("현황")]
+    st_accs = [a for a in accounts if a["_hint"].startswith("현황") and a["kind"] != "investment"]
     ROLE_KO = {"living": "생활", "saving": "저축·투자", "business": "사업", "custodial": "위탁", "exclude": "제외", "loan": "대출"}
     n += 1
     Q.append(f"{n}. 거래 패턴과 상품명으로 **계좌 성격을 추정**했습니다. 표를 보고 **틀린 것만** '번호 → 성격'으로 고쳐주세요. 성격은 생활 / 저축·투자 / 사업 / **위탁(남의 돈 섞임, 비율도)** / 제외(부모님 카드 등 남의 것). 예: '15 생활', '3 사업', '31 위탁 엄마 40%'. 다 맞으면 '맞아'.\n")
@@ -354,20 +418,13 @@ def main(argv: list[str]) -> None:
         Q.append("")
     if st_accs:
         n += 1
-        Q.append(f"{n}. 잔액만 있는 자산 {len(st_accs)}개는 **전부 저축·투자(내 것)** 로 추정했습니다. 남의 돈이 섞였거나(위탁) 제외할 것만 번호로. 다 맞으면 '맞아'.\n")
-        Q.append("| 종류 | 개수 | 번호 | 합계 | 항목 |"); Q.append("|---|---:|---|---:|---|")
-        from collections import defaultdict as _dd
-        grp = _dd(list)
+        Q.append(f"{n}. 거래는 없고 잔액만 잡힌 항목 {len(st_accs)}개입니다. **한 항목씩** 보고 남의 돈이 섞였거나 제외할 것만 번호로 고쳐주세요. 다 맞으면 '맞아'.\n")
+        Q.append("| 번호 | 종류 | 항목 | 추정 | 현재 금액 |")
+        Q.append("|---:|---|---|---|---:|")
         for a in st_accs:
-            grp[a["kind"]].append(a)
-        for k, v in grp.items():
-            nums = [accounts.index(a) + 1 for a in v]
-            total = 0
-            for a in v:
-                try: total += int(a["_hint"].split("·")[1].strip().split(" ")[0].replace(",", "").replace("원", ""))
-                except (IndexError, ValueError): pass
-            rng = f"{min(nums)}~{max(nums)}" if len(nums) > 1 else str(nums[0])
-            Q.append(f"| {KIND_LABEL.get(k, k)} | {len(v)} | {rng} | {won(total)} | " + ", ".join(a['name'] for a in v) + " |")
+            num = accounts.index(a) + 1
+            amount = re.search(r"· (.+?) \(거래 없음", a["_hint"]).group(1)
+            Q.append(f"| {num} | {KIND_LABEL.get(a['kind'], a['kind'])} | {a['name']} | **{ROLE_KO.get(a['role'], a['role'])}** | {amount} |")
         Q.append("")
     Q.append("")
     Q.append("## C. 매달 고정으로 나가는 것 (표 1개, 틀린 것만)\n")
@@ -375,11 +432,20 @@ def main(argv: list[str]) -> None:
     n += 1
     Q.append(f"{n}. 3개월 이상 비슷한 금액이 반복된 지출입니다. **추정 카테고리와 고정비 여부**를 보고 틀린 것만 '번호 → 카테고리' 또는 '번호 변동'으로 고쳐주세요. 다 맞으면 '맞아'.\n")
     Q.append("> AI에게: 표를 줄이지 말고 그대로. 고정비=매달 거의 같은 금액이 나가는 계약(월세·관리비·보험·구독·학원·보육료). 외식·쇼핑처럼 금액이 변하는 건 변동.\n")
-    Q.append("| 번호 | 내용 | 개월 | 월 금액 | 계좌 | 추정 카테고리 | 고정? |"); Q.append("|---:|---|---:|---:|---|---|:---:|")
+    Q.append("| 번호 | 내용 | 개월 | 월 금액 | 실제 출금(최근순) | 계좌 | 추정 카테고리 | 고정? |"); Q.append("|---:|---|---:|---:|---|---|---|:---:|")
     for i, r in enumerate(rec_exp[:25], 1):
-        Q.append(f"| {i} | {r['match']} | {r['months']} | {won(r['median'])} | {r['account']} | {r['guess'] or '?'} | {'고정' if r['fixed'] else '변동'} |")
+        evidence = "<br>".join(f"{d} {won(a)}" for d, a in r["evidence"][:6])
+        Q.append(f"| {i} | {r['match']} | {r['months']} | {won(r['median'])} | {evidence} | {r['account']} | {r['guess'] or '?'} | {'고정' if r['fixed'] else '변동'} |")
     fixed_sum = sum(r["median"] for r in rec_exp[:25] if r["fixed"])
     Q.append(f"\n추정 고정비 합계 **월 {won(fixed_sum)}**. 여기서 확정된 것은 이후 달에 자동으로 고정비로 잡힌다.\n")
+    Q.append("### 연 1~2회 나가는 지출 후보\n")
+    Q.append("매달 반복되지는 않지만 보험·세금·연회비처럼 다시 나갈 수 있는 후보입니다. 표를 보고 정기적으로 예상할 것만 번호를 골라주세요.\n")
+    Q.append("| 번호 | 내용 | 실제 출금 | 계좌 | 추정 카테고리 |")
+    Q.append("|---:|---|---|---|---|")
+    for i, r in enumerate(annual_candidates[:20], 1):
+        evidence = "<br>".join(f"{d} {won(a)}" for d, a in r["evidence"])
+        Q.append(f"| {i} | {r['match']} | {evidence} | {r['account']} | {r['guess']} |")
+    Q.append("")
     Q.append("## D. 사람에게 간 이체 (상대당 1문)\n")
     for k, cnt, amt in people_like[:12]:
         n += 1
@@ -408,10 +474,20 @@ def main(argv: list[str]) -> None:
         n += 1
         Q.append(f"{n}. **{k}** — {cnt}건 · {won(income_amt[k])} → 급여 / 사업 / 배당·이자 / 가족 지원 / 환급 중?")
     Q.append("")
-    Q.append("## G. 뱅샐에 없는 자산·부채 (1문)\n")
+    if status.investments:
+        Q.append("## G. 주식·ETF·펀드 귀속\n")
+        n += 1
+        Q.append(f"{n}. 총액을 다시 묻지 않습니다. export에 잡힌 **종목 하나하나가 누구 돈인지**만 확인합니다. 내 것 / 위탁(누구 돈, 비율) / 제외 중 틀린 항목만 번호로 알려주세요. 다 내 것이면 '전부 내 것'.\n")
+        Q.append("| 번호 | 금융사 | 종목 | 종류 | 평가금액 | 현재 추정 |")
+        Q.append("|---:|---|---|---|---:|---|")
+        for i, inv in enumerate(status.investments, 1):
+            Q.append(f"| {i} | {inv.get('금융사', '')} | {inv.get('상품명', '')} | {inv.get('투자상품종류', '')} | {won(inv.get('평가금액') or 0)} | 내 것 |")
+        Q.append("")
+    Q.append("## H. 주거 형태 (1문)\n")
     n += 1
-    Q.append(f"{n}. 부동산, 비상장주식, 전세보증금, 빌려준 돈, 개인적으로 빌린 돈이 있나요? 대략 금액이면 됩니다. (없으면 '없음')")
-    Q.append(f"\n---\n총 {n}문. 계좌(B)와 이체 상대(C)가 핵심이고 D~F는 '맞아/아니' 수준. 확인형 질문은 답이 '네'면 다음으로.")
+    housing_evidence = ", ".join(f"{l.get('상품명','대출')} 잔액 {won(l.get('대출잔액') or 0)}" for l in status.loans if "주택" in str(l) or "담보" in str(l))
+    Q.append(f"{n}. 현재 주거는 **자가 / 전세 / 월세 / 가족 집 / 회사 제공 / 기타** 중 무엇인가요? 자가·전세라면 공동명의나 남의 돈이 섞였는지도 알려주세요." + (f" export에는 {housing_evidence} 정보가 있어 자가 가능성이 있습니다." if housing_evidence else " export에서 주택 소유를 확정할 근거는 찾지 못했습니다."))
+    Q.append(f"\n---\n총 {n}문. 계좌(B)와 이체 상대(D)가 핵심이고 E~H는 '맞아/아니' 수준. 확인형 질문은 답이 '네'면 다음으로.")
     (SETUP / "02_질문지.md").write_text("\n".join(Q), encoding="utf-8")
 
     print(f"✔ {len(txs):,}건 · {months[0]}~{months[-1]} · 계좌 {len(accounts)}개 · 미분류 {len(unclassified)}건 → 묶음 {len(clusters)}개")
